@@ -1,0 +1,169 @@
+---
+title: "Untitled"
+author: "Campbell Miller"
+date: '2022-05-25'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+pacman::p_load(haven, tidyverse, here, ggplot2, scales, fixest, etable)
+
+noxdata <- read_dta(here(file = "nbp.dta"))
+```
+
+1. Briefly explain the policy variations induced by the NBP program.
+Hint:
+a. What does variable “nbp” = 1 indicate?
+b. What does variable “summer” = 1 indicate?
+c. What does variable “post = 1” indicate?
+
+
+  The "nbp = 1" variable indicates that the state was regulated by the NBP program, meaning that they were one of the Eastern states that they were taking place in the cap and trade program to reduce NOx emissions during the summer. The "summer = 1" variable indicates that the observation was taken during the summer months. The "post = 1" variable indicates that observation was taken after 2003, in which the NBP cap and trade for pollution in the summer months policy was taken. 
+  In all, these variables represent a set of policy variations that change based on if the state was part of the NBP program or not, if the observation was taken during the summer or winter months, and if the observation was taken before or after the implementaion of the NBP program in 2003. 
+
+
+2. Replicate Panel A (States Participating in NBP) of the Appendix Fig. 2.
+Hint: To obtain the solid line, compute year-over-year averages of “nox_emit” for all counties with “nbp”=1 and “summer”=1.
+
+```{r}
+#df with just summer and nbp obs
+nbp_summer = noxdata[which((noxdata$nbp == "1") & (noxdata$summer == "1")),]
+#get the mean of nox
+nbp_summer <- nbp_summer %>%
+  group_by(year) %>%
+  mutate(mean_nox_emit = mean(nox_emit))
+
+#df with winter and nbp obs
+nbp_winter = noxdata[which((noxdata$nbp == "1") & (noxdata$summer == "0")),] %>%
+  group_by(year) %>%
+  mutate(mean_nox_emit = mean(nox_emit))
+
+
+ggplot(data = noxdata, aes(x = year, y = mean_nox_emit, color = "Summer Months")) +
+  geom_line(data = nbp_summer, aes(x = year, y = mean_nox_emit, color = "Summer Months")) +
+  geom_point(data = nbp_winter, aes(x = year, y = mean_nox_emit, color = "Winter Months")) +
+  geom_line(data = nbp_winter, aes(x = year, y = mean_nox_emit, color = "Winter Months"), linetype = "dashed") +
+  scale_x_continuous(breaks = c(1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007)) +
+  scale_y_continuous(breaks=seq(0.4, 1.6, 0.4), limits = c(0.4, 1.6)) +
+  geom_vline(xintercept = 2002, color = "black") +
+  guides(color = guide_legend(override.aes = list(linetype = c("solid", "dashed")))) +
+  ggtitle("(A) States Participating in NBP") +
+  theme(axis.title.x = element_blank()) +
+  theme(axis.title.y = element_blank())
+
+```
+
+
+
+3. State the parallel trends assumption underlying Panel A of Appendix Fig. 2. Does the graphical pattern suggest the parallel trends assumption is likely to hold?
+Hint: Which line (solid or dash) represents the “treatment group” and which line represents the “control group”?
+
+  The parallel trend identification assumption is that the the trends of the control group equal the trends of the treatment group, if the treatment group did not receive the treatment. In Panel A of Fig. 2, the summer months represent the treatment group, as the states pollution has to be reduced to follow the regulations of the NBP program. The winter months represent the treatment groups because the NBP program only has requirements to reduce pollution in the summer months, so the winter months represent the normal trends of the states in the program. In this case we are saying the trends of the winter months equal the trends of the summer months, had the summer months not been forced to comply to NBP regulations since the program does not affect the winter months at all. 
+  The graph shows that before the NBP program, both summer and winter months showed general signs of a decrease in pollution. After the NBP program was put in place, we can see a sharp decrease in summer months pollution, while the winter months pollution continue their slow downward trend. To judge if the graph suggests that the parallel trends assumption is likely to hold, we need to be confident that the trends of the winter months equal what the trends of the summer months would have been without the NBP program. To do this we can look at the trends prior to the NBP program and see if the summer months and winter months exhibit the same trends. On this graph the summer months have a small peak after 1998, but after that the summer and winter months appear to show the same downward trends so it seems likely that these trends would continue to be quite simialr in the future without the treatment and the parallel trend assumption would hold in this case.
+
+4. Clearly state, estimate, and report a difference-in-differences regression that examines the effect of the NBP program on NOx emissions corresponding to Panel A of Appendix Fig.2. Provide a one-sentence interpretation of the coefficient for the interaction term “summer*post”.
+
+
+```{r}
+#df with only those affected by the nbp program
+noxdata1 <- noxdata %>%
+  filter(nbp == 1) %>%
+#make interaction term
+  mutate(post_summer = post*summer)
+
+#feols regression to cluster se's on county and state
+reg_panelA <- feols(nox_emit ~ post_summer + post + summer | fips_state + fips_county, data = noxdata1) 
+#-0.3731
+reg_panelA
+
+
+etable(reg_panelA, title = "Effect of NBP Program on Participating States")
+
+```
+
+  The coefficient of the summer times post variable corresponding to panel A is the estimate of the effect of the NBP program in participating states which is -0.3732. this coefficient means that there is a a 37.32% reduction in NOx emissions in states participating in the NBP program in the summer months.
+
+
+5. Replicate Panel B (States Not Participating in NBP) of the Appendix Fig. 2.
+Hint: To obtain the dash line, compute year-over-year averages of “nox_emit” for all counties with “nbp”=0 and “summer”=0.
+
+
+```{r}
+#df with just summer and no nbp obs
+nbp_summer1 = noxdata[which((noxdata$nbp == "0") & (noxdata$summer == "1")),]
+#get the mean of nox
+nbp_summer1 <- nbp_summer1 %>%
+  group_by(year) %>%
+  mutate(mean_nox_emit = mean(nox_emit))
+
+#df with winter and no nbp obs
+nbp_winter1 = noxdata[which((noxdata$nbp == "0") & (noxdata$summer == "0")),] %>%
+  group_by(year) %>%
+  mutate(mean_nox_emit = mean(nox_emit))
+
+#plot
+ggplot(data = noxdata, aes(x = year, y = mean_nox_emit, color = "Summer Months")) +
+  geom_line(data = nbp_summer1, aes(x = year, y = mean_nox_emit, color = "Summer Months")) +
+  geom_point(data = nbp_winter1, aes(x = year, y = mean_nox_emit, color = "Winter Months")) +
+  geom_line(data = nbp_winter1, aes(x = year, y = mean_nox_emit, color = "Winter Months"), linetype = "dashed") +
+  scale_x_continuous(breaks = c(1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007)) +
+  scale_y_continuous(breaks=seq(0.4, 1.6, 0.4), limits = c(0.4, 1.6)) +
+  geom_vline(xintercept = 2002, color = "black") +
+  guides(color = guide_legend(override.aes = list(linetype = c("solid", "dashed")))) +
+  ggtitle("(B) States Not Participating in NBP") +
+  theme(axis.title.x = element_blank()) +
+  theme(axis.title.y = element_blank())
+```
+
+
+6. Counties in eastern states (i.e., those with “nbp”=0) are not regulated by the NBP program.Therefore, there is no reason to expect the introduction of the NBP program in 2003 would affect NOx emissions in counties with “nbp”=0. Explain what is the point of Panel B of the Appendix Fig. 2.
+Hint: What is the logic underlying a “placebo” test?
+
+  We expect there to be no changes in NOx emission trends in states not participating in the NBP program after the program was put into place. This mean that these states can serve as a placebo test to show that our previous parallel trends assumption can hold. In panel B of Fig.2 we can see that in the states that are not participating in the NBP program, the trends of the summer and winter months are essentially equal through the time before and after the implementation of the NBP program. This serves as a placebo test for the states that are participating in the NBP program because panel B shows that the winter and summer month pollution trends are actually equal for the states that are not in the program, so the trends that we assumed would continue to be equal in panel A past 2003 can actually be fairly certainly assumed to have actually continued if NBP was not implemented.
+
+
+7. Clearly state, estimate, and report a difference-in-differences regression that examines the effect of the NBP program on NOx emissions corresponding to Panel B of Appendix Fig.2. Provide a one-sentence interpretation of the coefficient for the interaction term “summer*post”.
+
+
+```{r}
+#df with only those not affected by nbp program
+noxdata2 <- noxdata %>%
+  filter(nbp == 0) %>%
+#make interation term
+  mutate(post_summer = post*summer) 
+
+#feols regression to cluster se's on county and state
+reg_panelB <- feols(nox_emit ~ post_summer + post + summer | fips_state + fips_county, data = noxdata2) 
+
+etable(reg_panelB)
+#-0.0421
+```
+
+  The coefficient of the summer times post variable corresponding to panel B is the estimate of the effect of the NBP program in non-participating states which is -0.0421. this coefficient means that there is a a 4.21% reduction in NOx emissions in states not participating in the NBP program in the summer months. 
+
+8. Clearly state, estimate, and report a triple-difference regression that examines the effect of NBP program on NOx emissions. Discuss how the coefficient for the interaction term “nbp*summer*post” relates to your answers to question 4 and question 7.
+
+```{r}
+#make interactions for the triple diff
+noxdata <- noxdata %>%
+  mutate(post_summer = post*summer) %>%
+  mutate(nbp_post = nbp*post) %>%
+  mutate(nbp_summer = nbp*summer) %>%
+  mutate(triple = post*summer*nbp)
+#run feols regression with clustered se's 
+reg_triple <- feols(nox_emit ~ post_summer + nbp_post + nbp_summer + post + summer + nbp + triple | fips_state + fips_county, data = noxdata)
+
+etable(reg_triple)
+```
+
+  The coefficient "triple" is the coefficient that corresponds with the interaction term of nbp times summer times post. This coefficient is -0.331, which is the difference between our coefficient in question 4 and the coefficient in question 7. This is because question 4 looked at how the NBP program affected NOx emissions in states that participated in the program (which is what we would expect to be affected), and question 7 looked at how the NBP program affected NOx emissions in states not participating in the program (which we would expect to not be affected). In this case the triple-difference regression will show us the actual effect of the NBP program on NOx emissions, which is the difference between the states we expect to be affected by the NBP program and the states we do not expect to be affected by the program. This coefficient tells us that the effect of the NBP program on NOx emission was a reduction of 33.1% in NOx.
+
+
+9. Suppose that your job is to provide a retrospective analysis on the impact of the NBP program for the Environmental Protection Agency. Write a short summary of 200 or fewer words describing what you have found in your analysis of the NBP data. In particular, based on your triple-difference estimate, provide a calculation on how much NOx emissions in total has the NBP program reduced from 2003 to 2007?
+
+  In our analysis we have found that the NBP program has reduced NOx emissions by 33.1% in states that are participating in the program. We can be confident in these results as panel A shows that summer and winter months of states in the program would likely have continued to show similar trends if the program was not put in place, which means that the difference in NOx emissions after the program was put into place was due to the program itself. Panel B further adds confidence to these results as we would expect the program to have no effect on states not participating in the program, which is shown by the continued trends in these states even after the program is put in place. This means that the true effect of NOx emission reduction is the difference between the difference in summer and winter months of those states participating in the program and those that are not paticipating. We calculate that the program has reduced NOx emission from 2003 to 2007 in the amount of 1.32 million tons (333,000 tons per summer * 4 years). 
+

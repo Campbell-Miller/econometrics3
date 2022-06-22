@@ -1,0 +1,279 @@
+---
+title: "Untitled"
+author: "Campbell Miller"
+date: '2022-05-07'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+pacman::p_load(haven, tidyverse, here, sandwich, stargazer, ggplot2, rdrobust, rddensity)
+
+pollutiondata <- read_dta(here(file = "huairiver.dta"))
+```
+
+1. Explain why a simple comparison of air pollution in northern cities versus southern cities would not measure the causal effect of the Huai River Policy. Explain how did the Ebenstein et al. paper overcome this problem by using a regression discontinuity design.  
+
+  A comparison of the air pollution in the north and south would not be a causal estimate of the Huai River Policy because it leaves out all of the other variables that could affect air pollution. There are a number of things that could happen in one area that does not happen in the other that could affect pollution only in that area. We know that the north is colder than the south and this could cause more pollution through an increased production of goods to fight the cold or decrease other areas of pollution because people leave the house less to avoid the cold and thus release less pollution through driving. There are numerous variables like this and they all add up to make it impossible to get the true causal impact of the Huai River Policy on air pollution as the effects of the policy cannot be distinguished from the other natural effects of the north and south just being different regions.
+  The Ebenstein et al. paper overcomes this problem with the regression discontinuity because they look at the cities just on either side of the Huai River. The logic behind this regression discontinuity design is that the areas just on either side of the river are essentially the same since they are so close together, and so the only major difference between them is that one gets the effect of the free heating and one does not from the Huai River Policy. This allows us to get a more accurate measure of the causal effect of the policy on air pollution because the difference in air pollution in a city just on the south side of the river and a city just on the north side of the river should be due almost only on the fact that one city gets the free heating and produces more air pollution and one city does not.
+
+
+2. Explain what is the outcome variable and what is the assignment variable in Fig.2 of the Ebenstein et al. paper?  
+
+  Figure 2 in the paper shows how pm10 particulate matter varies in density based on different degrees of distance from the Huai River. In this case the outcome variable is the amount of pm10 in the air in that area and the assignment variable is what how many degrees of distance the area is from the Huai River, with negative degrees corresponding to distance south of the river and positive degrees with distance north of the river. With these variables, the figure shows that there is a clear jump in the trend of pm10 pollution in the air for areas just north of the river.
+
+
+3. What is a binned scatter plot? Explain how it is constructed.  
+Hint: Binscatter plot is covered in week1’s lecture.  
+
+
+   A binned scatter plot is similar to a normal scatter plot where two variables are visualized on the x and y axis, but the binned version groups the data points into bins. Aggregate statistics are used to recapitulate the bins, so an average of all the data points in the bin is used as that point on the scatter plot. A typical numbers of bins in a binned scatter plot is 20, this allows for the data to be split into 5% chunks. By splitting the data into these larger chunks, the resulting scatter plot can be much easier to visualize with large data sets as there won't be hundreds or thousands of individual data points on the scatter plot to look at. By binning the data, trends are still visible and the figure looks much neater and easier to read. 
+   For this example we binned the data two ways. The first was in the 20 bins as described above. The second was bins based on how many degrees from the Huai river on either side the city is, which is how the paper binned the data ("The circles in Fig. 2 represent the average PM10 concentration across locations within 1°-latitude distance bins from the Huai River") (Ebenstein page 5).
+   
+   
+ 
+4. Graphical regression discontinuity analysis.     
+ 
+a. Draw a binned scatter plot to visualize how PM10 changes at the Huai River line.  
+Display fitted lines (linear, or quadratic, or whatever functional form you see fit) based on what you see in the data.   
+
+ 
+```{r}
+#bin the data in 20 bins
+pollutiondata <- pollutiondata %>%
+  mutate(pm10_bin = cut(pm10, breaks = quantile(pm10, probs = seq(0,1, by = 0.05), na.rm = TRUE)))
+#bin the data based on the degrees from the huai river like they had in the paper
+pollutiondata <- pollutiondata %>%
+  mutate(pm10_bin_huai = cut(dist_huai, breaks = c(-13, -12, -11, -10, -9, -8, -7, -6, -5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17), na.rm = TRUE))
+
+#check the bin variable is a factor
+is.factor(pollutiondata$pm10_bin)
+is.factor(pollutiondata$pm10_bin_huai)
+
+#want each bin to be almost equal
+table(pollutiondata$pm10_bin)
+
+table(pollutiondata$pm10_bin_huai)
+#this one is not equal groups since it is binned based on degree by the river
+```
+
+```{r}
+#plot binned scatterplot with the 20 bins
+#pollutiondata %>%
+ # group_by(pm10_bin, north_huai) %>%
+  #summarize(pm10 = mean(pm10), dist_huai = mean(dist_huai), north_huai = north_huai) %>%
+  #ggplot(aes(x = dist_huai, y = pm10, color = north_huai)) +
+  #geom_point() +
+  #geom_smooth(mapping=aes(group = north_huai)) +
+  #geom_vline(xintercept = 0, color = "red") 
+  
+#plot binned scatterblot using the degrees of distance from the river as the bins
+pollutiondata %>%
+  group_by(pm10_bin_huai, north_huai) %>%
+  summarize(pm10 = mean(pm10), dist_huai = mean(dist_huai), north_huai = north_huai) %>%
+  ggplot(aes(x = dist_huai, y = pm10, color = north_huai)) +
+  geom_point() +
+  geom_smooth(mapping=aes(group = north_huai) ,se=0) +
+  geom_vline(xintercept = 0, color = "red") 
+  
+#ggplot for temp changes over huai river
+pollutiondata %>%
+  group_by(pm10_bin_huai, north_huai) %>%
+  summarize(temp = mean(temp), dist_huai = mean(dist_huai), north_huai = north_huai) %>%
+  ggplot(aes(x = dist_huai, y = temp, color = north_huai)) +
+  geom_point() +
+  geom_smooth(mapping=aes(group = north_huai), color = "red") +
+  geom_vline(xintercept = 0, color = "black") +
+  theme(legend.position = "none") +
+  ggtitle("Temperature Changes at Huai River Line") +
+  xlab("Degrees from the Huai River") +
+  ylab("Average Temeprature (F)") +
+  theme(plot.title = element_text(hjust = 0.5)) +
+   theme(panel.background = element_rect(fill = 'snow2', 
+                                         colour = 'black'))
+
+pollutiondata %>%
+  group_by(pm10_bin, north_huai) %>%
+  summarize(prcp = mean(prcp), dist_huai = mean(dist_huai), north_huai = north_huai) %>%
+  ggplot(aes(x = dist_huai, y = prcp, color = north_huai)) +
+  geom_point() +
+  geom_smooth(mapping=aes(group = north_huai), color = "red") +
+  geom_vline(xintercept = 0, color = "black") +
+  theme(legend.position = "none") +
+  ggtitle("Temperature Changes at Huai River Line") +
+  xlab("Degrees from the Huai River") +
+  ylab("Average Temeprature (F)") +
+  theme(plot.title = element_text(hjust = 0.5)) +
+   theme(panel.background = element_rect(fill = 'snow2', 
+                                         colour = 'black'))
+
+pollutiondata %>%
+  group_by(pm10_bin, north_huai) %>%
+  summarize(wspd = mean(wspd), dist_huai = mean(dist_huai), north_huai = north_huai) %>%
+  ggplot(aes(x = dist_huai, y = wspd, color = north_huai)) +
+  geom_point() +
+  geom_smooth(mapping=aes(group = north_huai), color = "red") +
+  geom_vline(xintercept = 0, color = "black") +
+  theme(legend.position = "none") +
+  ggtitle("Temperature Changes at Huai River Line") +
+  xlab("Degrees from the Huai River") +
+  ylab("Average Temeprature (F)") +
+  theme(plot.title = element_text(hjust = 0.5)) +
+   theme(panel.background = element_rect(fill = 'snow2', 
+                                         colour = 'black'))
+  
+```
+
+```{r}
+
+#rdplot for pm10 and distance used for regression discontinuity graphs
+rdplot(pollutiondata$pm10, pollutiondata$dist_huai, p = 3, nbins = NULL, kernel = "triangular", binselect = "esmv", x.label = "Degrees from Huai River", y.label = "PM10-μg/m3", title = "PM10-μg/m3 Concentration Changes at Huai River Line", col.dots = "black", col.lines = "purple") 
+   
+```
+
+ 
+ 
+b. Draw binned scatter plots to test whether (i) temperature, (ii) precipitation, and (iii) wind speed changes at the Huai River line.  Display fitted lines (linear, or quadratic, or whatever functional form you see fit) based on what you see in the data.   
+
+
+```{r}
+#rdplot for temp and distance used for regression discontinuity graphs
+rdplot(pollutiondata$temp, pollutiondata$dist_huai, p = 1, nbins = NULL, kernel = "triangular", binselect = "esmv", x.label = "Degrees from Huai River", y.label = "Average Temperature (F)", title = "Temperature Changes at Huai River Line", col.dots = "black", col.lines = "red") 
+```
+
+```{r}
+#rdplot for precipitation and distance used for regression discontinuity graphs
+rdplot(pollutiondata$prcp, pollutiondata$dist_huai, p = 3, nbins = NULL, kernel = "triangular", binselect = "esmv", x.label = "Degrees from Huai River", y.label = "Average Precipitation (mm)", title = "Precipitation Changes at Huai River Line", col.dots = "black", col.lines = "blue") 
+```
+
+```{r}
+#rdplot for wind speed and distance used for regression discontinuity graphs
+rdplot(pollutiondata$wspd, pollutiondata$dist_huai, p = 2, nbins = NULL, kernel = "triangular", binselect = "esmv", x.label = "Degrees from Huai River", y.label = "Average Wind speed (m/s)", title = "Wind Speed Changes at Huai River Line", col.dots = "black", col.lines = "green")
+```
+
+
+
+
+5. Regression analysis.  Run the regressions that correspond to your three graphs in 4a and 4b to quantify the discontinuities that you see in the data.  Report a 95% confidence interval for each of these estimates.   
+ 
+
+```{r}
+#rdrobust regression to find coefficient and bandwidth
+rdrobust(y = pollutiondata$pm10, x = pollutiondata$dist_huai, all = TRUE) %>%
+  summary()
+
+rdrobust(y = pollutiondata$temp, x = pollutiondata$dist_huai, all = TRUE) %>%
+  summary()
+
+rdrobust(y = pollutiondata$prcp, x = pollutiondata$dist_huai, all = TRUE) %>%
+  summary()
+
+rdrobust(y = pollutiondata$wspd, x = pollutiondata$dist_huai, all = TRUE) %>%
+  summary()
+```
+
+With this rdrobust() regression we are given conventional, bias-corrected, and robust methods of determining the confidence interval. Looking at the paper, the closest values seem to be the conventional results. Using these results we can get the confidence intervals for each of the estimates.
+ 
+pm10 95% confidence interval (21.792, 78.603)
+temperature 95% confidence interval (-16.547, 5.653)
+precipitation 95% confidence interval (-0.408, -0.133)
+wind speed 95% confidence interval (-1.187, 0,292)
+
+
+
+6. Recall that any quasi experiment requires an identification assumption to make it as good as an experiment.  What is the identification assumption for regression discontinuity design?  Explain whether your graphs in 4b are consistent with that assumption.   
+
+  The identification assumption for a regression discontinuity design is that the change in policy or the treatment that you are studying is the only reason that there is a change in the outcome variable. In this case it would be that the only reason that the amount of pm10 in the city just to the north of the Huai river is different than the amount of pm10 in the city to the south of the river is due to the change in policy of free heating to cities in the north. To prove this assumption, manipulation and covariate smoothness tests can be run.The manipulation test shows that the individual in the experiment could not manipulate the input variable to move from one side of the cutoff to the other. The covariate smoothness test shows that no other variables change discontinuously at the cutoff by showing that the trends of these covariates from before the cutoff continue on to after the cutoff on a graph.
+  The graphs in 4b with average temperature, wind speed, and precipitation can serve as covariate smoothness tests since we assume they are all variables that are not affected by the treatment of the Huai River Policy. Looking at the graphs, there appears to be a slight jump over the cutoff for the temperature graph, however looking at the data points instead of the trend line it appears as if it is fairly consistent on this graph. The average precipitation graph shows what appears to be a more significant jump after the cutoff, which could mean that the identification assumption is not met in this case. The wind speed graph appears to be more all over the place and so there is no jump after the cutoff in this case. In all since there is at least one graph that could show that the identification assumption is not met in this setting, more work must be done to prove the validity of the quasi experimental design.
+
+
+
+
+
+7. Another type of validity test for regression discontinuity design is the manipulation test. 
+Do we need to worry about manipulation in this study context? Explain why or why not. If you believe a manipulation test should be done, report such a test. 
+
+
+
+```{r}
+rdplotdensity(rddensity(pollutiondata$dist_huai), type = "line", lcol = 2, lwd = 1.5, histFillCol = "black", histFillShade = .4, CItype = "none", X = pollutiondata$dist_huai, title = "Manipulation Test for Distance from the Huai River", xlabel = "Degree of Distance from the Huai River", ylabel = "Density of OBservations")
+```
+
+  A manipulation test is used to show that how far you are from the cutoff is about as good as being randomly assigned. This would mean that individual data points in the experiment could not sort around the cutoff to get to their desired side of the cutoff. This can be tested by looking as the distribution of observations around the cutoff. In the context of this paper, since we are looking at cities on either side of the river and the cities did not know that this policy of free heating north of the river was going to be implemented, a manipulation test is likely not needed. This is because the cities would have no reason to choose to build on one side of the river or the other and once the policy is put into place a city cannot just move to the other side of the river. Since using the context we have in the area, there was no reason to build just north vs just south of the river before the heating policy, and cities cannot just get up and move to the other side of the river after the policy is put into place, we can assume that the cities just on one side of the river versus the other side is as good as being randomly assigned and do not need a manipulation test.
+
+
+
+8. Consider the “placebo test” in Fig. 4 of the Ebenstein et al. paper.  
+a. Explain the logic of the “placebo test” underlying Fig. 4. Why did the authors estimate regression discontinuity using false locations of the Huai River? What do the results of this test tell us?  
+
+  The placebo test in the paper was used to show that there were no discontinuities observed in other areas of the region. By pretending that the river was a 1-5 degrees north or south of it's actual position and performing the same calculations, they can see if the results are similar to the results from the river in its original position. We would assume that the only area where there are significant differences of just being on one side of the river versus being on the other side would be in the area the river actually is. If results similar to the results found in the original analysis were found with the placebo river in different locations then it would show that it was not being just on the other side of the river that resulted in the change in pollution. 
+  The results of this placebo test show that every hypothetical river position when the analysis is run, includes zero in it's 95% confidence interval. With zero in the 95% confidence interval, it shows that it is significantly likely to have an effect of zero which would mean that the effect of being on one side of the river versus the other was not significantly significant on air pollution. Since the true position of the river is the only one that does not include zero in the 95% confidence interval, there is evidence that there is a significant difference in air pollution on being just on the other side of the river on air pollution. But this significant difference only occurs when the river is at its true position and not in any of the hypothetical locations found in the placebo test.
+
+
+
+ 
+b. Replicate Fig. 4 of Ebenstein et al. (2017). Hint: To obtain cities’ distance to a “placebo” Huai River that is 1-degree North of the true Huai River, simply add 1 to the “dist_huai” variable. 
+
+
+```{r}
+#run the rdrobust regression for each placebo river from -5 to 5 degrees
+dist_huai_neg5 <- rdrobust(y = pollutiondata$pm10, x = pollutiondata$dist_huai, c = -5, all = TRUE)
+dist_huai_neg4 <- rdrobust(y = pollutiondata$pm10, x = pollutiondata$dist_huai, c = -4, all = TRUE)
+dist_huai_neg3 <- rdrobust(y = pollutiondata$pm10, x = pollutiondata$dist_huai, c = -3, all = TRUE)
+dist_huai_neg2 <- rdrobust(y = pollutiondata$pm10, x = pollutiondata$dist_huai, c = -2, all = TRUE)
+dist_huai_neg1 <- rdrobust(y = pollutiondata$pm10, x = pollutiondata$dist_huai, c = -1, all = TRUE)
+dist_huai_0 <- rdrobust(y = pollutiondata$pm10, x = pollutiondata$dist_huai, c = 0, all = TRUE)
+dist_huai_1 <- rdrobust(y = pollutiondata$pm10, x = pollutiondata$dist_huai, c = 1, all = TRUE)
+dist_huai_2 <- rdrobust(y = pollutiondata$pm10, x = pollutiondata$dist_huai, c = 2, all = TRUE)
+dist_huai_3 <- rdrobust(y = pollutiondata$pm10, x = pollutiondata$dist_huai, c = 3, all = TRUE)
+dist_huai_4 <- rdrobust(y = pollutiondata$pm10, x = pollutiondata$dist_huai, c = 4, all = TRUE)
+dist_huai_5 <- rdrobust(y = pollutiondata$pm10, x = pollutiondata$dist_huai, c = 5, all = TRUE)
+
+
+#make a vector with the desired coefficients
+robust_coef <- c(dist_huai_neg5$coef[1], dist_huai_neg4$coef[1], dist_huai_neg3$coef[1], dist_huai_neg2$coef[1], dist_huai_neg1$coef[1], dist_huai_0$coef[1], dist_huai_1$coef[1], dist_huai_2$coef[1], dist_huai_3$coef[1], dist_huai_4$coef[1], dist_huai_5$coef[1])
+#make a vector with the desired standard errors
+robust_se <- c(dist_huai_neg5$se[1], dist_huai_neg4$se[1], dist_huai_neg3$se[1], dist_huai_neg2$se[1], dist_huai_neg1$se[1], dist_huai_0$se[1], dist_huai_1$se[1], dist_huai_2$se[1], dist_huai_3$se[1], dist_huai_4$se[1], dist_huai_5$se[1])
+#make a data frame with the premade vectors and set position as a variable for the -5 to 5 degrees
+robust_cutoff <- data.frame(position = c(-5:5), robust_coef, robust_se)
+
+
+```
+
+```{r}
+#make a graph using the position to show the river from the various degrees and the coefficient from each rdrobust regression as the point plotted
+#use geomerrorbar to make confidince intervals around the coefficient
+ggplot(robust_cutoff, aes(x = position)) +
+  geom_point(aes(y = robust_coef, size = 20, color = "red")) +
+  geom_errorbar(aes(ymin = robust_coef - 1.96* robust_se, 
+                    ymax = robust_coef + 1.96* robust_se)) +
+  geom_hline(yintercept = 0, color = "black") +
+  ggtitle("Placebo Test of Various Hypothetical Huai River Locations") +
+  theme(plot.title = element_text(hjust = 0.5)) +
+   theme(panel.background = element_rect(fill = 'snow2', 
+                                         colour = 'black')) +
+  theme(legend.position = "none") +
+  xlab("Degree of Distance from Original Huai River") +
+  ylab("95% Confidence Interval of Effects on Air Pollution")
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

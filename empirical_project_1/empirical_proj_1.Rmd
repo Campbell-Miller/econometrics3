@@ -1,0 +1,78 @@
+---
+title: "empirical project 1"
+author: "Campbell Miller"
+date: '2022-04-18'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE)
+```
+
+```{r, echo = FALSE}
+pacman::p_load(haven, tidyverse, here, sandwich, stargazer, tables)
+
+healthdata <- read_dta(here(file = "ohp.dta"))
+```
+
+
+2. 
+```{r, results='asis', echo = FALSE}
+#run a regression to see if variable is statistically different between control and treatment groups
+reg_age <- lm(age_inp ~ treatment, data= healthdata)
+reg_edu <- lm(edu_inp ~ treatment, data = healthdata)
+reg_dep <- lm(dep_dx_pre_lottery ~ treatment, data = healthdata)
+reg_dia <- lm(dia_dx_pre_lottery ~ treatment, data = healthdata)
+reg_sex <- lm(gender_inp ~ treatment, data = healthdata)
+reg_hyp <- lm(hbp_dx_pre_lottery  ~ treatment, data = healthdata)
+#robust standard errors
+age_se <- sqrt(diag(vcovHC(reg_age, type = "HC3")))
+edu_se <- sqrt(diag(vcovHC(reg_edu, type = "HC3")))
+dep_se <- sqrt(diag(vcovHC(reg_dep, type = "HC3")))
+dia_se <- sqrt(diag(vcovHC(reg_dia, type = "HC3")))
+sex_se <- sqrt(diag(vcovHC(reg_sex, type = "HC3")))
+hyp_se <- sqrt(diag(vcovHC(reg_hyp, type = "HC3")))
+
+
+
+#make stargazer showing results
+stargazer(reg_age, reg_edu, reg_sex, reg_dep, reg_dia, reg_hyp, se = list(age_se, edu_se, sex_se, dep_se, dia_se, hyp_se), covariate.labels = c("Treatment Effect", "Control Mean"), dep.var.labels = c("Age", "Education", "Gender", "Depression prior to Lottery", "Diabetes prior to Lottery", "Hypertension prior to Lottery"), title = ("Balance Test between Treatment and Control Groups"),  type = 'html')
+```
+
+
+
+5.
+
+```{r, results='asis', echo = FALSE}
+#regression to see how enrolling in medicaid is different between control and treatment group
+reg_compliance <- lm(ohp_all_ever_survey ~ treatment, data = healthdata)
+compliance_se <- sqrt(diag(vcovHC(reg_compliance, type = "HC3")))
+
+stargazer(reg_compliance, se = list(compliance_se), title = ("Estimation of the Compliance Rate"), covariate.labels =  c("Treatment Effect", "Control Mean"), dep.var.labels = c("Ever on Medicaid"), type = 'html')
+```
+
+
+
+6.
+```{r, results='asis', echo = FALSE}
+#regressions to see if various health characteristics differ between the control and treatment groups
+reg_bp <- lm(bp_sar_inp ~ treatment, data = healthdata)
+reg_postdep <- lm(dep_dx_post_lottery ~ treatment, data = healthdata)
+reg_postdia <- lm(dia_dx_post_lottery ~ treatment, data = healthdata)
+reg_posthyp <- lm(hbp_dx_post_lottery ~ treatment, data = healthdata)
+reg_med <- lm(rx_num_mod_inp ~ treatment, data = healthdata)
+reg_doc <- lm(doc_num_mod_inp ~ treatment, data = healthdata)
+
+#robust se
+bp_se <- sqrt(diag(vcovHC(reg_bp, type = "HC3")))
+postdep_se <- sqrt(diag(vcovHC(reg_postdep, type = "HC3")))
+postdia_se <- sqrt(diag(vcovHC(reg_postdia, type = "HC3")))
+posthyp_se <- sqrt(diag(vcovHC(reg_posthyp, type = "HC3")))
+med_se <- sqrt(diag(vcovHC(reg_med, type = "HC3")))
+doc_se <- sqrt(diag(vcovHC(reg_doc, type = "HC3")))
+
+#table
+stargazer(reg_bp, reg_postdep, reg_postdia, reg_posthyp, reg_med, reg_doc, se = list(bp_se, postdep_se, postdia_se, posthyp_se, med_se, doc_se), title = ("Intent to Treat Effect"), covariate.labels = c("Treatment Effect", "Control Group"), dep.var.labels = c("Post Lottery Blood Pressure", "Post Lottery Depression", "Post Lottery Diabetes", "Post Lottery Hypertension", "Post Lottery Number of Medications", "Post Lottery Number of Doctor Visits"), type = 'html')
+
+```
+

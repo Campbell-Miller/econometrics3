@@ -1,0 +1,148 @@
+---
+title: "Untitled"
+author: "Campbell Miller"
+date: '2022-05-19'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, echo = FALSE}
+pacman::p_load(haven, tidyverse, here, sandwich, stargazer, ggplot2, rdrobust, rddensity)
+
+pollutiondata <- read_dta(here(file = "huairiver.dta"))
+```
+
+4a.
+```{r, echo = FALSE}
+#bin the data in 20 bins
+pollutiondata <- pollutiondata %>%
+  mutate(pm10_bin = cut(pm10, breaks = quantile(pm10, probs = seq(0,1, by = 0.05), na.rm = TRUE)))
+#bin the data based on the degrees from the huai river like they had in the paper
+pollutiondata <- pollutiondata %>%
+  mutate(pm10_bin_huai = cut(dist_huai, breaks = c(-13, -12, -11, -10, -9, -8, -7, -6, -5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17), na.rm = TRUE))
+
+#check the bin variable is a factor
+is.factor(pollutiondata$pm10_bin)
+is.factor(pollutiondata$pm10_bin_huai)
+
+#want each bin to be almost equal
+table(pollutiondata$pm10_bin)
+
+table(pollutiondata$pm10_bin_huai)
+#this one is not equal groups since it is binned based on degree by the river
+```
+
+```{r, echo = FALSE}
+
+#rdplot for pm10 and distance used for regression discontinuity graphs
+rdplot(pollutiondata$pm10, pollutiondata$dist_huai, p = 3, nbins = NULL, kernel = "triangular", binselect = "esmv", x.label = "Degrees from Huai River", y.label = "PM10-μg/m3", title = "PM10-μg/m3 Concentration Changes at Huai River Line", col.dots = "black", col.lines = "purple") 
+   
+```
+
+4b.
+```{r, echo = FALSE}
+#rdplot for temp and distance used for regression discontinuity graphs
+rdplot(pollutiondata$temp, pollutiondata$dist_huai, p = 1, nbins = NULL, kernel = "triangular", binselect = "esmv", x.label = "Degrees from Huai River", y.label = "Average Temperature (F)", title = "Temperature Changes at Huai River Line", col.dots = "black", col.lines = "red") 
+```
+
+```{r, echo = FALSE}
+#rdplot for precipitation and distance used for regression discontinuity graphs
+rdplot(pollutiondata$prcp, pollutiondata$dist_huai, p = 3, nbins = NULL, kernel = "triangular", binselect = "esmv", x.label = "Degrees from Huai River", y.label = "Average Precipitation (mm)", title = "Precipitation Changes at Huai River Line", col.dots = "black", col.lines = "blue") 
+```
+
+```{r, echo = FALSE}
+#rdplot for wind speed and distance used for regression discontinuity graphs
+rdplot(pollutiondata$wspd, pollutiondata$dist_huai, p = 2, nbins = NULL, kernel = "triangular", binselect = "esmv", x.label = "Degrees from Huai River", y.label = "Average Wind speed (m/s)", title = "Wind Speed Changes at Huai River Line", col.dots = "black", col.lines = "green")
+```
+
+5.
+```{r, echo = FALSE}
+#rdrobust regression to find coefficient and bandwidth
+rdrobust(y = pollutiondata$pm10, x = pollutiondata$dist_huai, all = TRUE) %>%
+  summary()
+
+rdrobust(y = pollutiondata$temp, x = pollutiondata$dist_huai, all = TRUE) %>%
+  summary()
+
+rdrobust(y = pollutiondata$prcp, x = pollutiondata$dist_huai, all = TRUE) %>%
+  summary()
+
+rdrobust(y = pollutiondata$wspd, x = pollutiondata$dist_huai, all = TRUE) %>%
+  summary()
+```
+
+8b.
+```{r, echo = FALSE}
+#run the rdrobust regression for each placebo river from -5 to 5 degrees
+dist_huai_neg5 <- rdrobust(y = pollutiondata$pm10, x = pollutiondata$dist_huai, c = -5, all = TRUE)
+dist_huai_neg4 <- rdrobust(y = pollutiondata$pm10, x = pollutiondata$dist_huai, c = -4, all = TRUE)
+dist_huai_neg3 <- rdrobust(y = pollutiondata$pm10, x = pollutiondata$dist_huai, c = -3, all = TRUE)
+dist_huai_neg2 <- rdrobust(y = pollutiondata$pm10, x = pollutiondata$dist_huai, c = -2, all = TRUE)
+dist_huai_neg1 <- rdrobust(y = pollutiondata$pm10, x = pollutiondata$dist_huai, c = -1, all = TRUE)
+dist_huai_0 <- rdrobust(y = pollutiondata$pm10, x = pollutiondata$dist_huai, c = 0, all = TRUE)
+dist_huai_1 <- rdrobust(y = pollutiondata$pm10, x = pollutiondata$dist_huai, c = 1, all = TRUE)
+dist_huai_2 <- rdrobust(y = pollutiondata$pm10, x = pollutiondata$dist_huai, c = 2, all = TRUE)
+dist_huai_3 <- rdrobust(y = pollutiondata$pm10, x = pollutiondata$dist_huai, c = 3, all = TRUE)
+dist_huai_4 <- rdrobust(y = pollutiondata$pm10, x = pollutiondata$dist_huai, c = 4, all = TRUE)
+dist_huai_5 <- rdrobust(y = pollutiondata$pm10, x = pollutiondata$dist_huai, c = 5, all = TRUE)
+
+
+#make a vector with the desired coefficients
+robust_coef <- c(dist_huai_neg5$coef[1], dist_huai_neg4$coef[1], dist_huai_neg3$coef[1], dist_huai_neg2$coef[1], dist_huai_neg1$coef[1], dist_huai_0$coef[1], dist_huai_1$coef[1], dist_huai_2$coef[1], dist_huai_3$coef[1], dist_huai_4$coef[1], dist_huai_5$coef[1])
+#make a vector with the desired standard errors
+robust_se <- c(dist_huai_neg5$se[1], dist_huai_neg4$se[1], dist_huai_neg3$se[1], dist_huai_neg2$se[1], dist_huai_neg1$se[1], dist_huai_0$se[1], dist_huai_1$se[1], dist_huai_2$se[1], dist_huai_3$se[1], dist_huai_4$se[1], dist_huai_5$se[1])
+#make a data frame with the premade vectors and set position as a variable for the -5 to 5 degrees
+robust_cutoff <- data.frame(position = c(-5:5), robust_coef, robust_se)
+
+
+```
+
+
+```{r, echo = FALSE}
+#make a graph using the position to show the river from the various degrees and the coefficient from each rdrobust regression as the point plotted
+#use geomerrorbar to make confidince intervals around the coefficient
+ggplot(robust_cutoff, aes(x = position)) +
+  geom_point(aes(y = robust_coef, size = 20, color = "red")) +
+  geom_errorbar(aes(ymin = robust_coef - 1.96* robust_se, 
+                    ymax = robust_coef + 1.96* robust_se)) +
+  geom_hline(yintercept = 0, color = "black") +
+  ggtitle("Placebo Test of Various Hypothetical Huai River Locations") +
+  theme(plot.title = element_text(hjust = 0.5)) +
+   theme(panel.background = element_rect(fill = 'snow2', 
+                                         colour = 'black')) +
+  theme(legend.position = "none") +
+  xlab("Degree of Distance from Original Huai River") +
+  ylab("95% Confidence Interval of Effects on Air Pollution")
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

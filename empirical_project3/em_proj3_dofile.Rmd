@@ -1,0 +1,124 @@
+---
+title: "Untitled"
+author: "Campbell Miller"
+date: '2022-06-05'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r, eval=FALSE}
+pacman::p_load(haven, tidyverse, here, ggplot2, scales, fixest, etable)
+
+noxdata <- read_dta(here(file = "nbp.dta"))
+```
+
+2.
+```{r, eval=FALSE}
+#df with just summer and nbp obs
+nbp_summer = noxdata[which((noxdata$nbp == "1") & (noxdata$summer == "1")),]
+#get the mean of nox
+nbp_summer <- nbp_summer %>%
+  group_by(year) %>%
+  mutate(mean_nox_emit = mean(nox_emit))
+
+#df with winter and nbp obs
+nbp_winter = noxdata[which((noxdata$nbp == "1") & (noxdata$summer == "0")),] %>%
+  group_by(year) %>%
+  mutate(mean_nox_emit = mean(nox_emit))
+
+
+ggplot(data = noxdata, aes(x = year, y = mean_nox_emit, color = "Summer Months")) +
+  geom_line(data = nbp_summer, aes(x = year, y = mean_nox_emit, color = "Summer Months")) +
+  geom_point(data = nbp_winter, aes(x = year, y = mean_nox_emit, color = "Winter Months")) +
+  geom_line(data = nbp_winter, aes(x = year, y = mean_nox_emit, color = "Winter Months"), linetype = "dashed") +
+  scale_x_continuous(breaks = c(1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007)) +
+  scale_y_continuous(breaks=seq(0.4, 1.6, 0.4), limits = c(0.4, 1.6)) +
+  geom_vline(xintercept = 2002, color = "black") +
+  guides(color = guide_legend(override.aes = list(linetype = c("solid", "dashed")))) +
+  ggtitle("(A) States Participating in NBP") +
+  theme(axis.title.x = element_blank()) +
+  theme(axis.title.y = element_blank())
+
+```
+
+4.
+```{r, eval=FALSE}
+#df with only those affected by the nbp program
+noxdata1 <- noxdata %>%
+  filter(nbp == 1) %>%
+#make interaction term
+  mutate(post_summer = post*summer)
+
+#feols regression to cluster se's on county and state
+reg_panelA <- feols(nox_emit ~ post_summer + post + summer | fips_state + fips_county, data = noxdata1) 
+#-0.3731
+reg_panelA
+
+
+etable(reg_panelA, title = "Effect of NBP Program on Participating States")
+
+```
+
+
+5.
+```{r, eval=FALSE}
+#df with just summer and no nbp obs
+nbp_summer1 = noxdata[which((noxdata$nbp == "0") & (noxdata$summer == "1")),]
+#get the mean of nox
+nbp_summer1 <- nbp_summer1 %>%
+  group_by(year) %>%
+  mutate(mean_nox_emit = mean(nox_emit))
+
+#df with winter and no nbp obs
+nbp_winter1 = noxdata[which((noxdata$nbp == "0") & (noxdata$summer == "0")),] %>%
+  group_by(year) %>%
+  mutate(mean_nox_emit = mean(nox_emit))
+
+#plot
+ggplot(data = noxdata, aes(x = year, y = mean_nox_emit, color = "Summer Months")) +
+  geom_line(data = nbp_summer1, aes(x = year, y = mean_nox_emit, color = "Summer Months")) +
+  geom_point(data = nbp_winter1, aes(x = year, y = mean_nox_emit, color = "Winter Months")) +
+  geom_line(data = nbp_winter1, aes(x = year, y = mean_nox_emit, color = "Winter Months"), linetype = "dashed") +
+  scale_x_continuous(breaks = c(1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007)) +
+  scale_y_continuous(breaks=seq(0.4, 1.6, 0.4), limits = c(0.4, 1.6)) +
+  geom_vline(xintercept = 2002, color = "black") +
+  guides(color = guide_legend(override.aes = list(linetype = c("solid", "dashed")))) +
+  ggtitle("(B) States Not Participating in NBP") +
+  theme(axis.title.x = element_blank()) +
+  theme(axis.title.y = element_blank())
+```
+
+
+7.
+```{r, eval=FALSE}
+#df with only those not affected by nbp program
+noxdata2 <- noxdata %>%
+  filter(nbp == 0) %>%
+#make interation term
+  mutate(post_summer = post*summer) 
+
+#feols regression to cluster se's on county and state
+reg_panelB <- feols(nox_emit ~ post_summer + post + summer | fips_state + fips_county, data = noxdata2) 
+
+etable(reg_panelB)
+#-0.0421
+```
+
+
+8.
+```{r, eval=FALSE}
+#make interactions for the triple diff
+noxdata <- noxdata %>%
+  mutate(post_summer = post*summer) %>%
+  mutate(nbp_post = nbp*post) %>%
+  mutate(nbp_summer = nbp*summer) %>%
+  mutate(triple = post*summer*nbp)
+#run feols regression with clustered se's 
+reg_triple <- feols(nox_emit ~ post_summer + nbp_post + nbp_summer + post + summer + nbp + triple | fips_state + fips_county, data = noxdata)
+
+etable(reg_triple)
+```
